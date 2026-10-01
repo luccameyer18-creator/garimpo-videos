@@ -34,8 +34,14 @@ jobs:
       - name: release da semana
         env:
           GH_TOKEN: ${{ github.token }}
+          CHAVE: ${{ secrets.CHAVE_VIDEOS }}
         run: |
           id=$(basename "${{ github.event.inputs.semana }}" .json)
-          cp saida/escolha.mp4 "veto-$id.mp4"
-          gh release create "semana-$id" "veto-$id.mp4" afinadas.json drops.json lista.txt --title "Candidatas · $id" --notes-file lista.txt \
-            || gh release upload "semana-$id" "veto-$id.mp4" afinadas.json drops.json lista.txt --clobber
+          v="veto-$id.mp4"
+          cp saida/escolha.mp4 "$v"
+          # som da biblioteca do TikTok (só pode ir pro TikTok): o vídeo de veto sai criptografado
+          if grep -q '"fonte": *"tiktok"' "${{ github.event.inputs.semana }}"; then
+            openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:CHAVE -in "$v" -out "$v.enc" && rm "$v" && v="$v.enc"
+          fi
+          gh release create "semana-$id" "$v" afinadas.json drops.json lista.txt --title "Candidatas · $id" --notes-file lista.txt \
+            || gh release upload "semana-$id" "$v" afinadas.json drops.json lista.txt --clobber
