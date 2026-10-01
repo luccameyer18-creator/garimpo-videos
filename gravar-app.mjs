@@ -236,11 +236,18 @@ function RELOGIO() {
 
 // ───────────── sobe o app ─────────────
 const PORTA = 8099;
-const srv = spawn(process.execPath, ['dev-server.mjs', String(PORTA)], { cwd: RAIZ, stdio: ['ignore', 'pipe', 'pipe'] });
+// o servidor do app volta sozinho se cair (01/10: na gravação em espanhol as faixas 3–5 deram
+// "Failed to fetch" e o vídeo saiu quebrado sem avisar)
 const logSrv = [];
-srv.stdout.on('data', (b) => logSrv.push(...String(b).split(/\r?\n/).filter(Boolean)));
-srv.stderr.on('data', (b) => logSrv.push(...String(b).split(/\r?\n/).filter(Boolean).map((l) => 'ERR ' + l)));
-srv.on('exit', (c) => logSrv.push('SERVIDOR SAIU código ' + c));
+let srv, fechando = false;
+const subir = () => {
+  srv = spawn(process.execPath, ['dev-server.mjs', String(PORTA)], { cwd: RAIZ, stdio: ['ignore', 'pipe', 'pipe'] });
+  srv.stdout.on('data', (b) => logSrv.push(...String(b).split(/\r?\n/).filter(Boolean)));
+  srv.stderr.on('data', (b) => logSrv.push(...String(b).split(/\r?\n/).filter(Boolean).map((l) => 'ERR ' + l)));
+  srv.on('exit', (c) => { logSrv.push('SERVIDOR SAIU código ' + c); if (!fechando) setTimeout(subir, 300); });
+};
+subir();
+const fecharSrv = () => { fechando = true; srv.kill(); };
 for (let k = 0; k < 50; k++) { try { await fetch(`http://127.0.0.1:${PORTA}/`); break; } catch { await new Promise((r) => setTimeout(r, 200)); } }
 const nav = await chromium.launch({ executablePath: CHROME, args: ['--autoplay-policy=no-user-gesture-required', '--force-color-profile=srgb', '--hide-scrollbars',
   ...(process.env.GL_ARGS ? process.env.GL_ARGS.split(' ') : ['--use-angle=d3d11', '--enable-gpu-rasterization', '--ignore-gpu-blocklist'])] });
@@ -255,6 +262,8 @@ await pag.addInitScript((l) => { try { localStorage.setItem('garimpo.idioma', l)
 // a gravação não precisa das fontes de música lá fora (as faixas vêm de audio/): cada teste
 // abria o app e varria hearthis/Audius/Jamendo de novo — e eles limitam (hearthis: devagar)
 await pag.route((u) => u.hostname !== '127.0.0.1' && /hearthis|audius|jamendo|workers\.dev/i.test(u.hostname), (r) => r.abort('blockedbyclient'));
+// o Jev (API paga) e o /_log do servidor de desenvolvimento ficam fora da gravação — igual na nuvem, que nem tem chave
+await pag.route((u) => u.hostname === '127.0.0.1' && /^\/_(jev|log)\b/.test(u.pathname), (r) => r.fulfill({ status: 503, contentType: 'application/json', body: '{"erro":"fora da gravação"}' }));
 await pag.goto(`http://127.0.0.1:${PORTA}/`, { waitUntil: 'domcontentloaded' });
 await pag.waitForTimeout(2500);
 await pag.click('#b-entrar');
@@ -305,7 +314,7 @@ console.log('carregadas:', JSON.stringify(pronto));
 if (process.env.ATE === 'carregar') {
   console.log('servidor:', logSrv.filter((l) => !/^200 /.test(l)).slice(-15).join(' | '), `(${logSrv.filter((l) => /^200 /.test(l)).length} respostas 200)`);
   for (const e of erros.slice(0, 15)) console.log('erro:', e);
-  await nav.close(); srv.kill(); process.exit(0);
+  await nav.close(); fecharSrv(); process.exit(0);
 }
 
 // o som que o app vai "ouvir": a mixagem final (master) e um trecho de cada faixa original (canais)
@@ -340,7 +349,10 @@ const V0 = await pag.evaluate(({ R, faixas, urls, bpms, AMB }) => {
   const V = __vt, { decks, mixer, ctx } = globalThis.__garimpo, body = document.body.classList;
   const t0 = performance.now();
   const agora = () => (performance.now() - t0) / 1000;
-  const em = (s, fn) => setTimeout(() => { try { fn(); } catch (e) { V.erros.push('agenda ' + s.toFixed(2) + ': ' + (e?.message || e)); } }, Math.max(0, s * 1000 - (performance.now() - t0)));
+  const em = (s, fn) => setTimeout(() => {
+    const falha = (e) => V.erros.push('agenda ' + s.toFixed(2) + ': ' + (e?.message || e));
+    try { const p = fn(); if (p && p.catch) p.catch(falha); } catch (e) { falha(e); }
+  }, Math.max(0, s * 1000 - (performance.now() - t0)));
   const clicar = (sel) => { const b = [...document.querySelectorAll(sel)].find((x) => x.offsetParent !== null) || document.querySelector(sel); b?.click(); };
   const pista = (on) => { if (body.contains('pista-cheia') !== on) clicar('.cena-pista'); };
   const viagem = (on) => { if (body.contains('viagem') !== on) clicar('.cena-viagem'); };
@@ -381,8 +393,13 @@ const V0 = await pag.evaluate(({ R, faixas, urls, bpms, AMB }) => {
     if (i >= 1 && i + 1 < N) em(f.drop_s + 0.3, async () => {       // a próxima entra no deck que acabou de sair
       const L = letra(i + 1);
       noDeck[L] = null; ultimo[L] = null;
-      await decks[L].carregarJamendo(faixas[i + 1], urls[i + 1]);
-      for (let k = 0; k < 600 && !decks[L].pronta; k++) await new Promise((r) => setTimeout(r, 50));
+      // até 4 tentativas (2 s virtuais cada; a última espera 20 s): carga que falha não passa calada
+      for (let t = 1; t <= 4; t++) {
+        try { await decks[L].carregarJamendo(faixas[i + 1], urls[i + 1]); } catch (e) { V.erros.push(`carga ${i + 1} tentativa ${t}: ${e?.message || e}`); }
+        for (let k = 0; k < (t < 4 ? 40 : 400) && !decks[L].pronta; k++) await new Promise((r) => setTimeout(r, 50));
+        if (decks[L].pronta) break;
+        V.erros.push(`carga ${i + 1} tentativa ${t}: não ficou pronta`);
+      }
       decks[L].transport.setPitchRange?.(0.5);
       decks[L].setPitch(tempoEm(R.faixas[i + 1].entrada_s) / bpms[i + 1] - 1);
       decks[L].seek(R.faixas[i + 1].fonte_ini_s);
@@ -423,7 +440,7 @@ for (let i = 0; i < N; i++) {
 }
 const pagErros = await pag.evaluate(() => ({ erros: __vt.erros.slice(0, 10), carregou3: __vt.cargas || null }));
 if (ff) { ff.stdin.end(); await new Promise((r) => ff.on('close', r)); }
-await nav.close(); srv.kill();
+await nav.close(); fecharSrv();
 const seg = (Date.now() - ini) / 1000;
 if (ff) {
   writeFileSync(saida.replace(/\.mp4$/, '.json'), JSON.stringify({ quadros: N, fps: FPS, tela: `${VW}x${VH}@${DSF}`, segundosGravando: Math.round(seg),
@@ -432,5 +449,14 @@ if (ff) {
   console.log(`ok ${saida} · ${N} quadros · ${(statSync(saida).size / 1e6).toFixed(1)} MB · ${(seg / 60).toFixed(1)} min (${(seg / N * 1000).toFixed(0)} ms/quadro)`);
 }
 console.log('cargas no meio:', JSON.stringify(pagErros.carregou3));
+console.log('servidor:', logSrv.filter((l) => !/^200 /.test(l)).slice(-12).join(' | ') || 'ok', `(${logSrv.filter((l) => /^200 /.test(l)).length} respostas 200)`);
+if (ff && !process.argv[4]) {
+  const cargas = pagErros.carregou3 || [], esperadas = Math.max(0, NF - 2), ruins = cargas.filter((c) => !c.pronta).length;
+  if (cargas.length < esperadas || ruins) {
+    console.error(`GRAVAÇÃO RUIM: ${cargas.length}/${esperadas} cargas no meio, ${ruins} sem ficar prontas — não usar este vídeo`);
+    for (const e of pagErros.erros) console.error('  ' + e);
+    process.exit(2);
+  }
+}
 const tudo = [...pagErros.erros, ...erros];
 console.log(tudo.length ? 'ERROS:\n' + tudo.slice(0, 10).join('\n') : 'sem erros na página');
