@@ -1,0 +1,78 @@
+{
+ "id": "2026-09-30-techno",
+ "genero": "techno",
+ "idiomas": [
+  "pt",
+  "es",
+  "en"
+ ],
+ "drops": [
+  4,
+  12,
+  20,
+  28,
+  36
+ ],
+ "fimComp": 44,
+ "rampa": true,
+ "ambientes": [
+  "viagem",
+  "pista",
+  "viagem",
+  "pista",
+  "viagem"
+ ],
+ "faixas": [
+  {
+   "arquivo": "audio/jamendo-1143987.mp3",
+   "drop_s": 36.213,
+   "batida_s": 0.45113,
+   "bpm": 133,
+   "titulo": "running man",
+   "artista": "SPILL",
+   "licenca": "CC BY-SA 3.0 · Jamendo",
+   "link": "https://www.jamendo.com/track/1143987"
+  },
+  {
+   "arquivo": "audio/jamendo-217709.mp3",
+   "drop_s": 181.174,
+   "batida_s": 0.43478,
+   "bpm": 138,
+   "titulo": "Theta",
+   "artista": "paniq",
+   "licenca": "CC BY-SA 2.0 DE · Jamendo",
+   "link": "https://www.jamendo.com/track/217709"
+  },
+  {
+   "arquivo": "audio/jamendo-489548.mp3",
+   "drop_s": 177.517,
+   "batida_s": 0.42857,
+   "bpm": 140,
+   "titulo": "Sons Of Anarchy",
+   "artista": "Felixjd",
+   "licenca": "CC BY-SA 3.0 · Jamendo",
+   "link": "https://www.jamendo.com/track/489548"
+  },
+  {
+   "arquivo": "audio/jamendo-1554922.mp3",
+   "drop_s": 45.2918,
+   "batida_s": 0.41379,
+   "bpm": 145,
+   "titulo": "Afterworld",
+   "artista": "Dj Safe",
+   "licenca": "CC BY 3.0 · Jamendo",
+   "link": "https://www.jamendo.com/track/1554922"
+  },
+  {
+   "arquivo": "audio/jamendo-39922.mp3",
+   "drop_s": 130.907,
+   "batida_s": 0.33333,
+   "bpm": 180,
+   "titulo": "Metal Tears",
+   "artista": "Windpearl",
+   "licenca": "CC BY 3.0 · Jamendo",
+   "link": "https://www.jamendo.com/track/39922"
+  }
+ ],
+ "app_commit": "247849bc3eb169a2f91acdb29341cdc8b54773fa"
+}

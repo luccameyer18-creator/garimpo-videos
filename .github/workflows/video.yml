@@ -1,0 +1,139 @@
+# A fábrica: de um dia planejado (dias/<id>.json) ao vídeo pronto pra postar em PT, ES e EN.
+#   mixagem → (pt | es | en em paralelo: grava a CDJ real do Garimpo, monta no HyperFrames,
+#   renderiza, comprime pra < 10 MB) → release "dia-<id>" com os 3 vídeos e as legendas.
+# Roda nas máquinas Linux do GitHub (repo público: grátis), sem pesar o PC do Lucca.
+name: video do dia
+
+on:
+  workflow_dispatch:
+    inputs:
+      dia:
+        description: "arquivo do dia (ex.: dias/2026-10-02-afro.json)"
+        required: true
+      idiomas:
+        description: "línguas, separadas por vírgula"
+        default: "pt,es,en"
+
+concurrency:
+  group: video-${{ github.event.inputs.dia }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: "22"
+  # sem placa de vídeo na nuvem: WebGL por software (determinístico; só mais lento)
+  GL_ARGS: "--use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist"
+  DSF: "1.6"
+
+jobs:
+  plano:
+    runs-on: ubuntu-latest
+    outputs:
+      id: ${{ steps.le.outputs.id }}
+      app: ${{ steps.le.outputs.app }}
+      idiomas: ${{ steps.le.outputs.idiomas }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: le
+        run: |
+          node -e '
+            const c = require("./" + process.argv[1]);
+            const out = require("fs").createWriteStream(process.env.GITHUB_OUTPUT, { flags: "a" });
+            out.write(`id=${c.id}\n`);
+            out.write(`app=${c.app_commit || "main"}\n`);
+            out.write(`idiomas=${JSON.stringify(process.argv[2].split(",").map((s) => s.trim()).filter(Boolean))}\n`);
+          ' "${{ github.event.inputs.dia }}" "${{ github.event.inputs.idiomas }}"
+
+  mix:
+    needs: plano
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}" }
+      - name: ffmpeg (com rubberband)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
+          ffmpeg -hide_banner -filters | grep -q rubberband || { echo "ffmpeg sem rubberband"; exit 1; }
+      - name: baixa as faixas (CC BY / BY-SA, Jamendo)
+        run: node baixar.mjs "${{ github.event.inputs.dia }}"
+      - name: mixagem com rampa de BPM
+        run: |
+          node mixar-rampa.mjs "${{ github.event.inputs.dia }}"
+          ffmpeg -y -v error -i "saida/${{ needs.plano.outputs.id }}/mix.wav" -af loudnorm=I=-9:TP=-1:LRA=9 -ar 48000 "saida/${{ needs.plano.outputs.id }}/mix-final.wav"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mix
+          path: |
+            saida/${{ needs.plano.outputs.id }}/mix.json
+            saida/${{ needs.plano.outputs.id }}/mix-final.wav
+            audio/
+          retention-days: 7
+
+  video:
+    needs: [plano, mix]
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        idioma: ${{ fromJSON(needs.plano.outputs.idiomas) }}
+    env:
+      ID: ${{ needs.plano.outputs.id }}
+      DIA: ${{ github.event.inputs.dia }}
+      IDIOMA: ${{ matrix.idioma }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: luccameyer18-creator/garimpo
+          ref: ${{ needs.plano.outputs.app }}
+          path: app-garimpo
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}" }
+      - name: ffmpeg, emoji e Chromium
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-noto-color-emoji > /dev/null
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - uses: actions/download-artifact@v4
+        with: { name: mix, path: . }
+      - name: mídia pro app (o gravador serve tudo de /_midia)
+        run: |
+          mkdir -p app-garimpo/_midia
+          cp audio/*.mp3 "saida/$ID/mix-final.wav" app-garimpo/_midia/
+      - name: grava a CDJ real (quadro a quadro)
+        run: APP_RAIZ="$GITHUB_WORKSPACE/app-garimpo" node gravar-app.mjs "$DIA"
+      - name: monta no HyperFrames
+        run: node gerar-hf.mjs "$DIA"
+      - name: renderiza
+        working-directory: projetos/garimpo-${{ needs.plano.outputs.id }}-${{ matrix.idioma }}
+        env:
+          FFMPEG_ENCODE_TIMEOUT_MS: "5400000"
+        run: npx --yes hyperframes@0.8.91 render --quality looks --output "$GITHUB_WORKSPACE/saida/$ID/garimpo-$ID-$IDIOMA-producao.mp4"
+      - name: comprime pro upload (< 10 MB)
+        run: node comprimir.mjs "saida/$ID/garimpo-$ID-$IDIOMA-producao.mp4" "saida/$ID/garimpo-$ID-$IDIOMA.mp4" 9.3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: video-${{ matrix.idioma }}
+          path: saida/${{ needs.plano.outputs.id }}/garimpo-${{ needs.plano.outputs.id }}-${{ matrix.idioma }}.mp4
+          retention-days: 30
+
+  entrega:
+    needs: [plano, video]
+    if: always() && needs.video.result != 'cancelled'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { pattern: "video-*", path: entrega, merge-multiple: true }
+      - name: release do dia
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ID: ${{ needs.plano.outputs.id }}
+        run: |
+          ls -la entrega
+          extra=""; [ -f "dias/$ID.posts.json" ] && extra="dias/$ID.posts.json"
+          gh release create "dia-$ID" entrega/*.mp4 $extra --title "Garimpo · $ID" --notes "Vídeos do dia $ID (PT/ES/EN), prontos pra postar." || gh release upload "dia-$ID" entrega/*.mp4 $extra --clobber
