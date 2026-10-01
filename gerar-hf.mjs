@@ -59,13 +59,15 @@ const AMB = cfg.ambientes || cfg.faixas.map((_, i) => (i % 2 ? 'viagem' : 'pista
 const f3 = (n) => +(+n).toFixed(3);
 const bpmMin = Math.round(Math.min(...cfg.faixas.map((f) => f.bpm))), bpmMax = Math.round(Math.max(...cfg.faixas.map((f) => f.bpm)));
 const rampa = bpmMax - bpmMin >= 3;
+// abertura curta (01/10): o ambiente em tela cheia com a PERGUNTA gigante já no 1º quadro, drop em ~2 s
+const ABRE = !!cfg.abertura;
 
 // ───────────── textos por língua ─────────────
 const nums = (n, e) => Array.from({ length: n }, (_, i) => i + 1).join(', ').replace(/, (\d+)$/, ` ${e} $1`);
 const GEN = (cfg.genero || 'techno').toUpperCase();
 const TXT = {
   pt: {
-    g1: `${NF} drops de`, g3: 'que quase ninguém ouviu',
+    g1: ABRE ? `qual desses ${NF} drops de` : `${NF} drops de`, g3: ABRE ? 'é o melhor? 👇' : 'que quase ninguém ouviu',
     pilula: rampa ? `${bpmMin} → ${bpmMax} BPM no Garimpo 👆` : 'mixando no Garimpo 👆',
     selo: `⚡ ${cfg.genero || 'techno'} · ${NF} drops`,
     novo: '✨ NOVO: viagem Full HD ao vivo', pista: '🎉 modo pista',
@@ -75,7 +77,7 @@ const TXT = {
     fim: ['qual foi o melhor?', `${nums(NF, 'ou')} 👇`], desc: 'CDJ grátis no navegador', link: '📌 link no comentário',
   },
   es: {
-    g1: `${NF} drops de`, g3: 'que casi nadie escuchó',
+    g1: ABRE ? `¿cuál de estos ${NF} drops de` : `${NF} drops de`, g3: ABRE ? 'es el mejor? 👇' : 'que casi nadie escuchó',
     pilula: rampa ? `${bpmMin} → ${bpmMax} BPM en Garimpo 👆` : 'mezclando en Garimpo 👆',
     selo: `⚡ ${cfg.genero || 'techno'} · ${NF} drops`,
     novo: '✨ NUEVO: visuales Full HD en vivo', pista: '🎉 modo pista',
@@ -85,7 +87,7 @@ const TXT = {
     fim: ['¿cuál fue el mejor?', `${nums(NF, 'o')} 👇`], desc: 'CDJ gratis en el navegador', link: '📌 link en los comentarios',
   },
   en: {
-    g1: `${NF} drops of`, g3: 'almost nobody has heard',
+    g1: ABRE ? `which of these ${NF}` : `${NF} drops of`, g3: ABRE ? 'drops is the best? 👇' : 'almost nobody has heard',
     pilula: rampa ? `${bpmMin} → ${bpmMax} BPM on Garimpo 👆` : 'mixed on Garimpo 👆',
     selo: `⚡ ${cfg.genero || 'techno'} · ${NF} drops`,
     novo: '✨ NEW: live Full HD visuals', pista: '🎉 club mode',
@@ -122,11 +124,17 @@ const K = 1920 / 900, OV = 1080 / (1600 * K);
 const X_A = 324, X_B = 1276, X_MIX = 820, Y_MIX = 650;
 const CAM = [];
 const ponto = (t, x, y, z, e) => CAM.push({ t: f3(t), x, y, z: +z.toFixed(4), ...(e ? { e } : {}) });
-ponto(0, 800, 450, OV);
-ponto(tBar(1), 800, 450, OV * 1.1, 'l');
-ponto(tBar(1.9), X_A, 430, 1.0, 'io');                                  // desliza pra onda do deck A
-ponto(D[0] - 0.26, X_A, 360, 1.5, 'in');
-ponto(D[0], X_A, 350, 1.6, 'l');
+if (ABRE) {                                                            // o ambiente aberto, empurrando até o drop
+  ponto(0, 800, 450, 1.0);
+  ponto(D[0] - 0.26, 800, 450, 1.12, 'in');
+  ponto(D[0], 800, 450, 1.16, 'l');
+} else {
+  ponto(0, 800, 450, OV);
+  ponto(tBar(1), 800, 450, OV * 1.1, 'l');
+  ponto(tBar(1.9), X_A, 430, 1.0, 'io');                                // desliza pra onda do deck A
+  ponto(D[0] - 0.26, X_A, 360, 1.5, 'in');
+  ponto(D[0], X_A, 350, 1.6, 'l');
+}
 for (let i = 0; i < NF; i++) {
   const pista = AMB[i] === 'pista';
   const fimAmb = i < NF - 1 ? FIM_AMB[i] : FIM_AMB[i];
@@ -179,16 +187,17 @@ const corte = (id, ini, fim, [ax, ay], texto, lado) => clip(id, ini, fim,
         <div class="rot-in rot-${lado}" data-layout-allow-overflow>${esc(texto)}</div></div>`, 'corte', 13);
 
 const clips = [];
-clips.push(clip('gancho', 0, tBar(2) + 0.05, `<div class="g-in sombra">
+const FIM_G = ABRE ? D[0] + 0.08 : tBar(2) + 0.05;                      // o flash do drop cobre a saída
+clips.push(clip('gancho', 0, FIM_G, `<div class="g-in sombra">
         <div class="g1">${esc(TXT.g1)}</div>
         <div class="g2">${esc(GEN)} ⚡</div>
         <div class="g3">${esc(TXT.g3)}</div>
       </div>`, '', 10));
-clips.push(clip('rod-gancho', 0.45, tBar(2) + 0.05, `<div class="rg-in"><span class="pilula sombra">${esc(TXT.pilula)}</span></div>`, '', 10));
-clips.push(clip('selo', tBar(1.95), Q, `<div class="selo-in sombra">${esc(TXT.selo)} · <b id="selo-bpm">${bpmMin}</b> BPM</div>`, '', 14));
+if (!ABRE) clips.push(clip('rod-gancho', 0.45, tBar(2) + 0.05, `<div class="rg-in"><span class="pilula sombra">${esc(TXT.pilula)}</span></div>`, '', 10));
+clips.push(clip('selo', ABRE ? D[0] + 0.3 : tBar(1.95), Q, `<div class="selo-in sombra">${esc(TXT.selo)} · <b id="selo-bpm">${bpmMin}</b> BPM</div>`, '', 14));
 // com muitos drops, menos texto (Jev 30/09: carga de texto 0,09 com tudo em todos): o 'segura'
 // no 1º, no 2º e no último; a passagem no 2º e no último; o TRACK ID em todos (é a trend)
-const comSegura = (i) => NF <= 3 || i <= 1 || i === NF - 1;
+const comSegura = (i) => !(ABRE && i === 0) && (NF <= 3 || i <= 1 || i === NF - 1);   // na abertura curta o 1º drop não tem tempo de "segura"
 const comPassa = (i) => i >= 1 && (NF <= 3 || i === 1 || i === NF - 1);
 for (let i = 0; i < NF; i++) {
   if (comSegura(i)) clips.push(segura(`segura${i + 1}`, segIni(i), D[i] + 0.14, i === NF - 1 && NF > 1 ? TXT.pesada : TXT.segura(i + 1)));
@@ -416,10 +425,14 @@ const html = `<!doctype html>
         // gancho: está na tela desde o 1º quadro; assenta e depois sai pra cima
         tl.fromTo("#gancho .g2", { scale: 1.04 }, { scale: 1, duration: 0.6, ease: "power3.out" }, 0);
         tl.fromTo("#gancho .g3", { y: 18 }, { y: 0, duration: 0.6, ease: "power3.out" }, 0);
-        tl.fromTo("#rod-gancho .rg-in", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.45);
-        tl.to("#gancho .g-in", { y: -70, opacity: 0, duration: 0.5, ease: "power2.in" }, bar2 - 0.5);
-        tl.to("#rod-gancho .rg-in", { y: 40, opacity: 0, duration: 0.4, ease: "power2.in" }, bar2 - 0.5);
-        tl.fromTo("#selo .selo-in", { x: -40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, ${f3(tBar(1.95))});
+        if (document.querySelector("#rod-gancho")) {
+          tl.fromTo("#rod-gancho .rg-in", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.45);
+          tl.to("#rod-gancho .rg-in", { y: 40, opacity: 0, duration: 0.4, ease: "power2.in" }, bar2 - 0.5);
+        }
+        ${ABRE ? `// abertura curta: a pergunta pulsa nos tempos do pré-drop e explode no drop
+        for (let b = 1; b < BAT.length && BAT[b] < ${f3(D[0] - 0.1)}; b++) tl.fromTo("#gancho .g2", { scale: 1.08 }, { scale: 1, duration: 0.25, ease: "power2.out", immediateRender: false }, BAT[b]);
+        tl.to("#gancho .g-in", { scale: 1.3, opacity: 0, duration: 0.18, ease: "power2.in" }, ${f3(D[0] - 0.1)});` : `tl.to("#gancho .g-in", { y: -70, opacity: 0, duration: 0.5, ease: "power2.in" }, bar2 - 0.5);`}
+        tl.fromTo("#selo .selo-in", { x: -40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, ${f3(ABRE ? D[0] + 0.3 : tBar(1.95))});
         tl.to("#selo .selo-in", { opacity: 0, duration: 0.3 }, ${f3(Q - 0.3)});
 
         // segura o N: entra, cresce, pulsa em cada tempo, explode no drop; escurece de leve e flash

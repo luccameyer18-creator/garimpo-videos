@@ -340,6 +340,18 @@ const fontes = await pag.evaluate(async ({ uMix, faixas }) => {
   dur: ((R.faixas[i].sai_s - R.faixas[i].entrada_s) * 1.35 * tempoEm(R.faixas[i].drop_s) / 60) * (60 / f.bpm) + 8 })) });
 console.log('fontes:', JSON.stringify(fontes));
 
+// abertura (01/10, depois da retenção de 29/09: a maioria saía no 1º segundo com a CDJ parada):
+// o 1º quadro já é o ambiente em tela cheia e a CDJ só aparece depois do 1º drop. Liga aqui, ainda
+// no relógio de verdade, pra viagem HD estar montada (sem a fusão da 2D) quando a gravação começa.
+if (cfg.abertura) await pag.evaluate(async (amb) => {
+  const b = document.body.classList, espera = (ms) => new Promise((r) => setTimeout(r, ms));
+  const ligado = () => (amb === 'viagem' ? b.contains('viagem') : b.contains('pista-cheia'));
+  if (!ligado()) document.querySelector(amb === 'viagem' ? '.cena-viagem' : '.cena-pista')?.click();
+  await espera(800);
+  document.dispatchEvent(new CustomEvent('so-show'));
+  await espera(6000);
+}, cfg.abertura);
+
 // ───────────── congela e arma a apresentação na régua ─────────────
 // N faixas alternando os decks (A, B, A, …), cada uma entrando no seu pré-drop por cima do drop
 // da anterior, crossfader andando nos 4 compassos, troca de graves no último, e o PITCH dos dois

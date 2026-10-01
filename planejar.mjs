@@ -20,8 +20,10 @@ const limpo = (t, artista) => t.replace(new RegExp('^' + artista.replace(/[.*+?^
 const lic = (l) => 'CC ' + l.replace(/^CC\s*/i, '').replace(/\/(\d\.\d)(\/(\w+))?$/, (m, v, x, p) => ' ' + v + (p ? ' ' + p.toUpperCase() : '')).toUpperCase().replace(/^CC CC /, 'CC ') + ' · Jamendo';
 const cfg = {
   id, genero, app_commit: appCommit || '247849bc3eb169a2f91acdb29341cdc8b54773fa', idiomas: ['pt', 'es', 'en'],
-  drops: Array.from({ length: N }, (_, i) => 4 + 8 * i), fimComp: 4 + 8 * (N - 1) + 8, rampa: true,
-  ambientes: faixas.map((_, i) => (i % 2 === 0 ? 'viagem' : 'pista')),
+  // abertura curta (01/10): a viagem em tela cheia com a pergunta no 1º quadro e o 1º drop em 1 compasso;
+  // os drops alternam pista/viagem a partir daí (o 1º drop corta da viagem pra pista)
+  abertura: 'viagem', drops: Array.from({ length: N }, (_, i) => 1 + 8 * i), fimComp: 1 + 8 * (N - 1) + 8, rampa: true,
+  ambientes: faixas.map((_, i) => (i % 2 === 0 ? 'pista' : 'viagem')),
   faixas: faixas.map((f) => ({ arquivo: f.arquivo, drop_s: f.drop_s, batida_s: f.batida_s, bpm: f.bpm,
     titulo: limpo(f.titulo, f.artista), artista: f.artista.replace(/\.$/, ''), licenca: lic(f.licenca), link: f.link })),
 };

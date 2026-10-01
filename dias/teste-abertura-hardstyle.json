@@ -1,0 +1,53 @@
+{
+ "id": "teste-abertura-hardstyle",
+ "genero": "hardstyle",
+ "app_commit": "247849bc3eb169a2f91acdb29341cdc8b54773fa",
+ "idiomas": [
+  "pt"
+ ],
+ "drops": [
+  1,
+  9,
+  17
+ ],
+ "fimComp": 25,
+ "rampa": true,
+ "ambientes": [
+  "pista",
+  "viagem",
+  "pista"
+ ],
+ "faixas": [
+  {
+   "arquivo": "audio/jamendo-1499607.mp3",
+   "drop_s": 71.396,
+   "batida_s": 0.46875,
+   "bpm": 128,
+   "titulo": "Mesmerize",
+   "artista": "One Milk",
+   "licenca": "CC BY-SA 3.0 · Jamendo",
+   "link": "https://www.jamendo.com/track/1499607"
+  },
+  {
+   "arquivo": "audio/jamendo-801589.mp3",
+   "drop_s": 112.119,
+   "batida_s": 0.42857,
+   "bpm": 140,
+   "titulo": "Leviathan Rising",
+   "artista": "Hatemagick",
+   "licenca": "CC BY-SA 3.0 · Jamendo",
+   "link": "https://www.jamendo.com/track/801589"
+  },
+  {
+   "arquivo": "audio/jamendo-1498074.mp3",
+   "drop_s": 182.582,
+   "batida_s": 0.4,
+   "bpm": 150,
+   "titulo": "Kick The Bass",
+   "artista": "ElectricNRG",
+   "licenca": "CC BY-SA 3.0 · Jamendo",
+   "link": "https://www.jamendo.com/track/1498074"
+  }
+ ],
+ "abertura": "viagem"
+}

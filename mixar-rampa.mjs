@@ -99,10 +99,12 @@ function desvioBumbo(pcm, t0, bIni, bFim) {
 
 const faixasOut = [];
 F.forEach((f, i) => {
-  const e = dB[i] - 16;                                       // entra 4 compassos antes do drop
+  // entra 4 compassos antes do drop; a 1ª, se o drop dela vem antes disso (abertura curta, 01/10:
+  // a maioria saía no 1º segundo), começa no início do vídeo com o pré-drop que couber
+  const e = i === 0 ? Math.max(0, dB[0] - 16) : dB[i] - 16;
   const x = i < N - 1 ? dB[i + 1] : NB;                        // sai no drop da próxima (ou no fim)
   const bat = 60 / f.bpm;
-  let srcIni = f.drop_s - 16 * bat;
+  let srcIni = f.drop_s - (dB[i] - e) * bat;
   // calibra: mede onde o bumbo caiu, corrige o início e estica de novo (até 2 vezes)
   let pcm = esticar(f, i, e, x, srcIni), desv = 0;
   for (let volta = 0; volta < 2; volta++) {
