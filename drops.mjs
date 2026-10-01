@@ -15,13 +15,17 @@ function url(c) {
   if (c.fonte === 'audius') return `https://api.audius.co/v1/tracks/${c.id}/stream?app_name=garimpo`;
   throw new Error('fonte ' + c.fonte);
 }
+// devagar com o Jamendo: 3 s entre faixas e espera crescente se ele pedir calma (429)
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 async function baixar(c) {
   const f = `audio/${c.fonte}-${c.id}.mp3`;
   if (existsSync(f)) return f;
-  const r = await fetch(url(c), { signal: AbortSignal.timeout(60000) });
-  if (!r.ok) throw new Error('download ' + r.status);
-  writeFileSync(f, Buffer.from(await r.arrayBuffer()));
-  return f;
+  for (let t = 1; ; t++) {
+    const r = await fetch(url(c), { signal: AbortSignal.timeout(120000) }).catch((e) => ({ ok: false, status: 'rede: ' + e.message }));
+    if (r.ok) { writeFileSync(f, Buffer.from(await r.arrayBuffer())); await espera(3000); return f; }
+    if (t >= 5) throw new Error('download ' + r.status);
+    await espera(r.status === 429 ? 60000 * t : 10000 * t);
+  }
 }
 function pcm(f) {
   return new Promise((ok, erro) => {

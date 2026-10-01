@@ -1,0 +1,41 @@
+# As candidatas da semana: baixa as faixas (CC BY / BY-SA do Jamendo), acha o drop e o BPM de cada
+# uma, afina pelo bumbo e monta o VÍDEO DE VETO (os drops numerados, todos no mesmo volume) pro Lucca
+# ouvir e vetar pelo número. Sai numa release "semana-<id>" com o vídeo e o afinadas.json, que o
+# planejar.mjs usa pra montar os dias.
+name: candidatas da semana
+
+on:
+  workflow_dispatch:
+    inputs:
+      semana:
+        description: "arquivo das candidatas (ex.: semanas/2026-10-03.json)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  candidatas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
+      - name: baixa e acha o drop de cada faixa
+        run: node drops.mjs "${{ github.event.inputs.semana }}"
+      - name: afina BPM e drop pelo bumbo
+        run: node afinar.mjs drops.json > afinadas.json
+      - name: vídeo de veto (drops numerados)
+        env: { POR_TAG: "5" }
+        run: node escolha.mjs afinadas.json | tee lista.txt
+      - name: release da semana
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(basename "${{ github.event.inputs.semana }}" .json)
+          cp saida/escolha.mp4 "veto-$id.mp4"
+          gh release create "semana-$id" "veto-$id.mp4" afinadas.json drops.json lista.txt --title "Candidatas · $id" --notes-file lista.txt \
+            || gh release upload "semana-$id" "veto-$id.mp4" afinadas.json drops.json lista.txt --clobber

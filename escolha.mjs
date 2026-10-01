@@ -7,7 +7,12 @@ import { spawnSync } from 'node:child_process';
 const FFMPEG = process.env.FFMPEG || 'ffmpeg';
 const FONTE = process.env.FONTE_ESCOLHA || 'hf-molde/assets/fonts/ArchivoBlack-Regular.ttf';
 const drops = JSON.parse(readFileSync(process.argv[2], 'utf8'));
-const ordem = process.argv[3].split('|');
+// sem lista: todas; com POR_TAG=n, as n de drop mais forte de cada gênero (agrupadas por gênero)
+const POR_TAG = Number(process.env.POR_TAG || 0);
+const ordem = process.argv[3] ? process.argv[3].split('|')
+  : POR_TAG ? Object.values(drops.reduce((m, d) => ((m[d.tag || '-'] ||= []).push(d), m), {}))
+    .flatMap((v) => v.sort((a, b) => b.forca - a.forca).slice(0, POR_TAG)).map((d) => d.titulo)
+  : drops.map((d) => d.titulo);
 const lista = ordem.map((t) => drops.find((d) => d.titulo.startsWith(t))).filter(Boolean);
 mkdirSync('saida/escolha', { recursive: true });
 
@@ -19,7 +24,7 @@ const partes = [];
 lista.forEach((d, i) => {
   const ini = Math.max(0, d.drop_s - 4 * d.batida_s), dur = 16 * d.batida_s;
   const titulo = curto(d.titulo.replace(/\s*\(original mix\)\.?/i, '').replace(/\s*[-–]\s*Electromagna.*$/i, ''), 30);
-  const info = `${Math.round(d.bpm)} BPM · drop ${Math.floor(d.drop_s / 60)}:${String(Math.round(d.drop_s % 60)).padStart(2, '0')} · ${d.licenca.replace(/^CC /i, 'CC ').toUpperCase()}`;
+  const info = `${d.tag ? d.tag.toUpperCase() + ' · ' : ''}${Math.round(d.bpm)} BPM · drop ${Math.floor(d.drop_s / 60)}:${String(Math.round(d.drop_s % 60)).padStart(2, '0')} · ${d.licenca.replace(/^CC /i, 'CC ').toUpperCase()}`;
   const linhas = [[String(i + 1), 230, 330], [titulo, cabe(titulo, 58), 640], [curto(d.artista, 32), cabe(curto(d.artista, 32), 42), 720], [info, cabe(info, 28), 800]];
   const txt = linhas.map((l, k) => { const f = `saida/escolha/t${i}-${k}.txt`; writeFileSync(f, l[0]); return f; });
   const desenho = linhas.map((l, k) => `drawtext=fontfile='${FONTE}':textfile='${txt[k]}':fontcolor=${k === 0 ? '0xff4ecd' : k === 3 ? '0xb9aed6' : 'white'}:fontsize=${l[1]}:x=(w-text_w)/2:y=${l[2]}`).join(',');
