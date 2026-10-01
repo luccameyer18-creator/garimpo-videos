@@ -259,10 +259,16 @@ await pag.goto(`http://127.0.0.1:${PORTA}/`, { waitUntil: 'domcontentloaded' });
 await pag.waitForTimeout(2500);
 await pag.click('#b-entrar');
 await pag.waitForTimeout(2500);
-for (const rotulo of ['pular', 'skip', 'saltar']) {              // o tour, em qualquer língua
-  const b = pag.getByText(rotulo, { exact: true }).first();
-  if (await b.isVisible().catch(() => false)) { await b.click(); break; }
+// o tour de boas-vindas, em qualquer língua: pelo botão (.guia-pular), não pelo texto — em espanhol
+// o texto não casou e o tour ficou escurecendo a CDJ a gravação inteira (01/10)
+for (let k = 0; k < 30; k++) {
+  const b = pag.locator('.guia-pular').first();
+  if (await b.isVisible().catch(() => false)) { await b.click().catch(() => {}); await pag.waitForTimeout(500); }
+  const aberto = await pag.evaluate(() => [...document.querySelectorAll('.guia-pular')].some((e) => e.offsetParent !== null && !e.hidden)).catch(() => false);
+  if (!aberto && k >= 4) break;                                    // espera ~2 s pra ter certeza que não abriu depois
+  await pag.waitForTimeout(400);
 }
+if (await pag.evaluate(() => [...document.querySelectorAll('.guia-pular')].some((e) => e.offsetParent !== null && !e.hidden)).catch(() => false)) throw new Error('o tour não fechou');
 await pag.waitForTimeout(800);
 await pag.keyboard.press('Escape').catch(() => {});
 
