@@ -1,0 +1,12 @@
+{
+  "name": "garimpo-videos",
+  "private": true,
+  "type": "module",
+  "description": "Fábrica de vídeos do Garimpo: grava a CDJ real do app, mixa as faixas, monta no HyperFrames e entrega o vídeo do dia em PT, ES e EN.",
+  "dependencies": {
+    "playwright-core": "1.63.0"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

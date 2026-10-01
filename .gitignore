@@ -1,0 +1,7 @@
+node_modules/
+audio/
+saida/
+projetos/
+tmp/
+app-garimpo/
+*.log
