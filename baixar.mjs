@@ -9,11 +9,13 @@ const AQUI = dirname(fileURLToPath(import.meta.url));
 const cfg = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 for (const f of cfg.faixas) {
-  if (!/^CC BY(-SA)? /i.test(f.licenca)) throw new Error(`licença que não pode ir em vídeo: ${f.titulo} (${f.licenca})`);
+  // fora do CC BY / BY-SA, só a biblioteca de sons isentos de royalties do TikTok — e só em dia
+  // privado (o áudio sai daqui criptografado: essa biblioteca só pode ir pro TikTok)
+  const tiktok = f.fonte === 'tiktok';
+  if (!/^CC BY(-SA)? /i.test(f.licenca) && !(tiktok && cfg.privado)) throw new Error(`licença que não pode ir em vídeo: ${f.titulo} (${f.licenca})`);
   const destino = join(AQUI, f.arquivo);
   if (existsSync(destino) && statSync(destino).size > 100000) { console.log('já tenho', f.arquivo); continue; }
-  const id = f.link.match(/track\/(\d+)/)[1];
-  const url = `https://prod-1.storage.jamendo.com/?trackid=${id}&format=mp32`;
+  const url = f.url || `https://prod-1.storage.jamendo.com/?trackid=${f.link.match(/track\/(\d+)/)[1]}&format=mp32`;
   for (let tentativa = 1; ; tentativa++) {
     const r = await fetch(url, { signal: AbortSignal.timeout(120000) }).catch((e) => ({ ok: false, status: 'rede: ' + e.message }));
     if (r.ok) {

@@ -11,6 +11,7 @@ const SR = 11025;
 mkdirSync('audio', { recursive: true });
 
 function url(c) {
+  if (c.url) return c.url;                                   // biblioteca do TikTok: o endereço do som
   if (c.fonte === 'jamendo') return `https://prod-1.storage.jamendo.com/?trackid=${c.id}&format=mp32`;
   if (c.fonte === 'audius') return `https://api.audius.co/v1/tracks/${c.id}/stream?app_name=garimpo`;
   throw new Error('fonte ' + c.fonte);

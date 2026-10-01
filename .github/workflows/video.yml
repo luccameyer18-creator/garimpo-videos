@@ -2,6 +2,8 @@
 #   mixagem → (pt | es | en em paralelo: grava a CDJ real do Garimpo, monta no HyperFrames,
 #   renderiza, comprime pra < 10 MB) → release "dia-<id>" com os 3 vídeos e as legendas.
 # Roda nas máquinas Linux do GitHub (repo público: grátis), sem pesar o PC do Lucca.
+# Dia "privado" (som da biblioteca do TikTok, que só pode ir pro TikTok): tudo que tem o áudio
+# (mixagem e vídeos) sai daqui criptografado com a chave CHAVE_VIDEOS (a outra ponta fica no PC do Lucca).
 name: video do dia
 
 on:
@@ -34,6 +36,7 @@ jobs:
       id: ${{ steps.le.outputs.id }}
       app: ${{ steps.le.outputs.app }}
       idiomas: ${{ steps.le.outputs.idiomas }}
+      privado: ${{ steps.le.outputs.privado }}
     steps:
       - uses: actions/checkout@v4
       - id: le
@@ -43,6 +46,7 @@ jobs:
             const out = require("fs").createWriteStream(process.env.GITHUB_OUTPUT, { flags: "a" });
             out.write(`id=${c.id}\n`);
             out.write(`app=${c.app_commit || "main"}\n`);
+            out.write(`privado=${c.privado ? "sim" : "nao"}\n`);
             out.write(`idiomas=${JSON.stringify(process.argv[2].split(",").map((s) => s.trim()).filter(Boolean))}\n`);
           ' "${{ github.event.inputs.dia }}" "${{ github.event.inputs.idiomas }}"
 
@@ -57,13 +61,21 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
           ffmpeg -hide_banner -filters | grep -q rubberband || { echo "ffmpeg sem rubberband"; exit 1; }
-      - name: baixa as faixas (CC BY / BY-SA, Jamendo)
+      - name: baixa as faixas (CC BY / BY-SA do Jamendo, ou a biblioteca do TikTok no dia privado)
         run: node baixar.mjs "${{ github.event.inputs.dia }}"
       - name: mixagem com rampa de BPM
         run: |
           node mixar-rampa.mjs "${{ github.event.inputs.dia }}"
           ffmpeg -y -v error -i "saida/${{ needs.plano.outputs.id }}/mix.wav" -af loudnorm=I=-9:TP=-1:LRA=9 -ar 48000 "saida/${{ needs.plano.outputs.id }}/mix-final.wav"
+      - name: tranca a mixagem (dia privado)
+        if: needs.plano.outputs.privado == 'sim'
+        env: { CHAVE: "${{ secrets.CHAVE_VIDEOS }}" }
+        run: |
+          tar cf mix.tar audio "saida/${{ needs.plano.outputs.id }}/mix.json" "saida/${{ needs.plano.outputs.id }}/mix-final.wav"
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:CHAVE -in mix.tar -out mix.tar.enc
+          rm -rf mix.tar audio "saida/${{ needs.plano.outputs.id }}"
       - uses: actions/upload-artifact@v4
+        if: needs.plano.outputs.privado != 'sim'
         with:
           name: mix
           path: |
@@ -71,6 +83,9 @@ jobs:
             saida/${{ needs.plano.outputs.id }}/mix-final.wav
             audio/
           retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: needs.plano.outputs.privado == 'sim'
+        with: { name: mix, path: mix.tar.enc, retention-days: 7 }
 
   video:
     needs: [plano, mix]
@@ -100,6 +115,10 @@ jobs:
           npx playwright install --with-deps chromium
       - uses: actions/download-artifact@v4
         with: { name: mix, path: . }
+      - name: destranca a mixagem (dia privado)
+        if: needs.plano.outputs.privado == 'sim'
+        env: { CHAVE: "${{ secrets.CHAVE_VIDEOS }}" }
+        run: openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:CHAVE -in mix.tar.enc | tar xf - && rm mix.tar.enc
       - name: mídia pro app (o gravador serve tudo de /_midia)
         run: |
           mkdir -p app-garimpo/_midia
@@ -115,10 +134,16 @@ jobs:
         run: npx --yes hyperframes@0.8.91 render --quality looks --output "$GITHUB_WORKSPACE/saida/$ID/garimpo-$ID-$IDIOMA-producao.mp4"
       - name: comprime pro upload (< 10 MB)
         run: node comprimir.mjs "saida/$ID/garimpo-$ID-$IDIOMA-producao.mp4" "saida/$ID/garimpo-$ID-$IDIOMA.mp4" 9.3
+      - name: tranca o vídeo (dia privado)
+        if: needs.plano.outputs.privado == 'sim'
+        env: { CHAVE: "${{ secrets.CHAVE_VIDEOS }}" }
+        run: |
+          f="saida/$ID/garimpo-$ID-$IDIOMA.mp4"
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:CHAVE -in "$f" -out "$f.enc" && rm "$f"
       - uses: actions/upload-artifact@v4
         with:
           name: video-${{ matrix.idioma }}
-          path: saida/${{ needs.plano.outputs.id }}/garimpo-${{ needs.plano.outputs.id }}-${{ matrix.idioma }}.mp4
+          path: saida/${{ needs.plano.outputs.id }}/garimpo-${{ needs.plano.outputs.id }}-${{ matrix.idioma }}.mp4*
           retention-days: 30
 
   entrega:
@@ -136,4 +161,4 @@ jobs:
         run: |
           ls -la entrega
           extra=""; [ -f "dias/$ID.posts.json" ] && extra="dias/$ID.posts.json"
-          gh release create "dia-$ID" entrega/*.mp4 $extra --title "Garimpo · $ID" --notes "Vídeos do dia $ID (PT/ES/EN), prontos pra postar." || gh release upload "dia-$ID" entrega/*.mp4 $extra --clobber
+          gh release create "dia-$ID" entrega/*.mp4* $extra --title "Garimpo · $ID" --notes "Vídeos do dia $ID (PT/ES/EN), prontos pra postar." || gh release upload "dia-$ID" entrega/*.mp4* $extra --clobber

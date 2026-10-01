@@ -55,7 +55,7 @@ const AMB = cfg.ambientes || cfg.faixas.map((_, i) => (i % 2 ? 'viagem' : 'pista
 const fotos = modo === 'fotos' ? process.argv[4].split(',').map(Number).sort((a, b) => a - b) : [];
 const DUR = modo === 'fotos' ? Math.max(...fotos) + 0.05 : Number(process.argv[4] || R.fim_s);
 // bpm e gênero vão junto: sem eles o analisador do app trava na tercina (leu 83,9 numa de 119,9)
-const idJm = (f) => f.link.match(/track\/(\d+)/)[1];
+const idJm = (f) => f.link?.match(/track\/(\d+)/)?.[1] || String(f.id || f.titulo).replace(/\W+/g, '');   // Jamendo, ou o id da biblioteca do TikTok
 const GENERO = cfg.genero ? cfg.genero.replace(/\b\w/g, (c) => c.toUpperCase()) : 'House';
 const jm = (f) => ({ source: 'jamendo', id: 'jm:' + idJm(f), title: f.titulo, artist: f.artista, bpm: f.bpm, genre: GENERO });
 // o mesmo mp32 do Jamendo, da cópia local (drops.mjs baixou): o Jamendo devolve 429 se a gente
